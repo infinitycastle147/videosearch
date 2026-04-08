@@ -6,6 +6,10 @@ import open_clip
 import torch
 from PIL import Image
 
+# Disable MKL-DNN globally: this host CPU lacks full AVX-512 support and
+# triggers a SIGFPE inside oneDNN during CLIP inference.
+torch.backends.mkldnn.enabled = False
+
 INDEX_DIR = ".videosearch"
 EMBEDDINGS_FILE = "embeddings.npy"
 METADATA_FILE = "metadata.json"
@@ -30,8 +34,6 @@ def embed_frame(model, preprocess, frame_path: Path) -> np.ndarray:
 
     Returns a 512-dim L2-normalized float32 numpy vector.
     """
-    # Disable MKL-DNN to avoid SIGFPE on CPUs without full AVX-512 support.
-    torch.backends.mkldnn.enabled = False
     image = preprocess(Image.open(frame_path)).unsqueeze(0)
     with torch.no_grad():
         features = model.encode_image(image)
