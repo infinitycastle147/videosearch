@@ -2,11 +2,41 @@ import json
 from pathlib import Path
 
 import numpy as np
+import open_clip
+import torch
+from PIL import Image
 
 INDEX_DIR = ".videosearch"
 EMBEDDINGS_FILE = "embeddings.npy"
 METADATA_FILE = "metadata.json"
 SUPPORTED_EXTENSIONS = {".mp4", ".mkv", ".avi", ".mov"}
+
+
+def load_model() -> tuple:
+    """Load CLIP ViT-B/32 model and image preprocessor.
+
+    Downloads weights on first call (~600MB), cached in ~/.cache afterwards.
+    Returns (model, preprocess).
+    """
+    model, _, preprocess = open_clip.create_model_and_transforms(
+        "ViT-B-32", pretrained="openai"
+    )
+    model.eval()
+    return model, preprocess
+
+
+def embed_frame(model, preprocess, frame_path: Path) -> np.ndarray:
+    """Encode a single image frame with CLIP.
+
+    Returns a 512-dim L2-normalized float32 numpy vector.
+    """
+    # Disable MKL-DNN to avoid SIGFPE on CPUs without full AVX-512 support.
+    torch.backends.mkldnn.enabled = False
+    image = preprocess(Image.open(frame_path)).unsqueeze(0)
+    with torch.no_grad():
+        features = model.encode_image(image)
+        features = features / features.norm(dim=-1, keepdim=True)
+    return features.squeeze(0).numpy().astype(np.float32)
 
 
 def load_index(video_dir: Path) -> tuple[np.ndarray, list]:

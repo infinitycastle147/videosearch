@@ -39,3 +39,21 @@ def test_save_index_creates_directory(tmp_path):
     assert (tmp_path / INDEX_DIR).is_dir()
     assert (tmp_path / INDEX_DIR / "embeddings.npy").exists()
     assert (tmp_path / INDEX_DIR / "metadata.json").exists()
+
+
+def test_embed_frame_returns_normalized_vector(tmp_path):
+    """embed_frame returns a 512-dim L2-normalized float32 vector."""
+    from videosearch.indexer import load_model, embed_frame
+    from PIL import Image
+
+    # Create a tiny fake JPEG
+    frame_path = tmp_path / "frame.jpg"
+    Image.new("RGB", (224, 224), color=(128, 64, 32)).save(frame_path)
+
+    model, preprocess = load_model()
+    emb = embed_frame(model, preprocess, frame_path)
+
+    assert emb.shape == (512,)
+    assert emb.dtype == np.float32
+    norm = np.linalg.norm(emb)
+    assert abs(norm - 1.0) < 1e-5, f"Expected unit vector, got norm={norm}"
