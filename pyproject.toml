@@ -18,5 +18,8 @@ dependencies = [
 [project.scripts]
 videosearch = "videosearch.cli:cli"
 
+[project.optional-dependencies]
+dev = ["pytest"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
