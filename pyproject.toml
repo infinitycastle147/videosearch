@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "videosearch"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "open-clip-torch",
+    "torch",
+    "torchvision",
+    "numpy",
+    "click",
+    "Pillow",
+]
+
+[project.scripts]
+videosearch = "videosearch.cli:cli"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
