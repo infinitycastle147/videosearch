@@ -1,0 +1,11 @@
+services:
+  videosearch:
+    build: .
+    volumes:
+      - ${VIDEO_DIR:-/tmp/videos}:/videos
+      - videosearch-models:/root/.cache
+      - videosearch-index:/videos/.videosearch
+
+volumes:
+  videosearch-models:
+  videosearch-index:
