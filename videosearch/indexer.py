@@ -1,4 +1,5 @@
 import json
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -24,9 +25,11 @@ def load_model() -> tuple:
     Downloads weights on first call (~600MB), cached in ~/.cache afterwards.
     Returns (model, preprocess).
     """
-    model, _, preprocess = open_clip.create_model_and_transforms(
-        "ViT-B-32", pretrained="openai"
-    )
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="QuickGELU mismatch")
+        model, _, preprocess = open_clip.create_model_and_transforms(
+            "ViT-B-32", pretrained="openai"
+        )
     model.eval()
     return model, preprocess
 
