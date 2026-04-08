@@ -1,8 +1,6 @@
-import json
 import numpy as np
 import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 from videosearch.indexer import save_index, load_index, INDEX_DIR
 

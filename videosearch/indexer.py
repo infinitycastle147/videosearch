@@ -2,9 +2,6 @@ import json
 from pathlib import Path
 
 import numpy as np
-import open_clip
-import torch
-from PIL import Image
 
 INDEX_DIR = ".videosearch"
 EMBEDDINGS_FILE = "embeddings.npy"
