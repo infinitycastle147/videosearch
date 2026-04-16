@@ -43,17 +43,13 @@ jobs:
             target: aarch64-apple-darwin
             bundle: dmg
             label: macOS-arm64
-          - os: macos-13
-            target: x86_64-apple-darwin
-            bundle: dmg
-            label: macOS-x64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             bundle: nsis
             label: Windows-x64
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-            bundle: appimage
+            bundle: deb
             label: Linux-x64
 
     runs-on: ${{ matrix.os }}
@@ -135,7 +131,7 @@ jobs:
 
       # ── Upload artifacts ──
       - name: Upload macOS DMG
-        if: contains(matrix.bundle, 'dmg')
+        if: matrix.bundle == 'dmg'
         uses: actions/upload-artifact@v4
         with:
           name: VideoSearch-${{ matrix.label }}
@@ -148,12 +144,12 @@ jobs:
           name: VideoSearch-${{ matrix.label }}
           path: ui/src-tauri/target/release/bundle/nsis/*.exe
 
-      - name: Upload Linux AppImage
-        if: matrix.bundle == 'appimage'
+      - name: Upload Linux .deb
+        if: matrix.bundle == 'deb'
         uses: actions/upload-artifact@v4
         with:
           name: VideoSearch-${{ matrix.label }}
-          path: ui/src-tauri/target/release/bundle/appimage/*.AppImage
+          path: ui/src-tauri/target/release/bundle/deb/*.deb
 
   # ── Step 3: Create GitHub Release ──
   release:

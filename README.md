@@ -15,9 +15,8 @@ Grab the latest release for your OS:
 | Platform | File | Notes |
 |---|---|---|
 | macOS (Apple Silicon) | `VideoSearch_x.x.x_aarch64.dmg` | M1/M2/M3/M4 Macs |
-| macOS (Intel) | `VideoSearch_x.x.x_x64.dmg` | Older Intel Macs |
 | Windows | `VideoSearch_x.x.x_x64-setup.exe` | Windows 10+ |
-| Linux | `VideoSearch_x.x.x_amd64.AppImage` | Most Linux distros |
+| Linux (Debian/Ubuntu) | `video-search_x.x.x_amd64.deb` | `sudo dpkg -i <file>.deb` |
 
 ### First-time setup
 
