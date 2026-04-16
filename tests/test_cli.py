@@ -31,8 +31,20 @@ def test_index_command_respects_interval_flag(runner, tmp_path):
 def test_search_command_prints_results(runner, tmp_path):
     """'search' subcommand prints ranked results."""
     fake_results = [
-        {"file": "park.mp4", "timestamp_str": "0:42", "timestamp_sec": 42, "score": 0.91},
-        {"file": "beach.mp4", "timestamp_str": "1:10", "timestamp_sec": 70, "score": 0.75},
+        {
+            "file": "park.mp4",
+            "best_score": 0.91,
+            "timestamps": [
+                {"timestamp_str": "0:42", "timestamp_sec": 42, "score": 0.91},
+            ],
+        },
+        {
+            "file": "beach.mp4",
+            "best_score": 0.75,
+            "timestamps": [
+                {"timestamp_str": "1:10", "timestamp_sec": 70, "score": 0.75},
+            ],
+        },
     ]
     with patch("videosearch.cli.do_search", return_value=fake_results):
         result = runner.invoke(cli, ["search", str(tmp_path), "dog at the park"])

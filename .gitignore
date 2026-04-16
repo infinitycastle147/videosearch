@@ -5,4 +5,8 @@ __pycache__/
 .pytest_cache/
 dist/
 build/
+models/
 .videosearch/
+.superpowers/
+ui/src-tauri/binaries/
+ui/src-tauri/target/

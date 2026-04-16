@@ -1,10 +1,16 @@
 from pathlib import Path
 
 import numpy as np
-import open_clip
-import torch
+import onnxruntime as ort
 
-from .indexer import load_index, load_model
+from .clip_tokenizer import tokenize
+from .indexer import _find_model, load_index
+
+
+def load_text_session() -> ort.InferenceSession:
+    """Load the CLIP text encoder ONNX session."""
+    model_path = _find_model("clip_text_encoder.onnx")
+    return ort.InferenceSession(str(model_path))
 
 
 def search(
@@ -16,8 +22,8 @@ def search(
     """Search the video index for clips matching the text query.
 
     Returns a list of result dicts (up to top_k), each containing:
-      file, mtime, timestamp_sec, timestamp_str, score
-    Sorted by score descending. Only results >= threshold are returned.
+      file, best_score, timestamps (list of {timestamp_sec, timestamp_str, score})
+    Sorted by best_score descending. Only results >= threshold are returned.
     """
     embeddings, metadata = load_index(video_dir)
 
@@ -26,25 +32,41 @@ def search(
             f"No index found in {video_dir}. Run 'videosearch index <dir>' first."
         )
 
-    model, _ = load_model()
-    tokenizer = open_clip.get_tokenizer("ViT-B-32")
+    session = load_text_session()
+    tokens = tokenize(query)
+    outputs = session.run(None, {"text": tokens})
+    query_emb = outputs[0].squeeze(0)
+    query_vec = (query_emb / np.linalg.norm(query_emb)).astype(np.float32)
 
-    tokens = tokenizer([query])
-    with torch.no_grad():
-        query_emb = model.encode_text(tokens)
-        query_emb = query_emb / query_emb.norm(dim=-1, keepdim=True)
+    scores = embeddings @ query_vec
 
-    query_vec = query_emb.squeeze(0).numpy().astype(np.float32)
-    scores = embeddings @ query_vec  # cosine similarity (both L2-normalized)
+    groups: dict[str, list[dict]] = {}
+    for idx, score_val in enumerate(scores):
+        score_f = float(score_val)
+        if score_f < threshold:
+            continue
+        file_name = metadata[idx]["file"]
+        hit = {
+            "timestamp_sec": metadata[idx]["timestamp_sec"],
+            "timestamp_str": metadata[idx]["timestamp_str"],
+            "score": score_f,
+            "type": metadata[idx].get("type", "video"),
+        }
+        if file_name not in groups:
+            groups[file_name] = []
+        groups[file_name].append(hit)
 
-    ranked = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)
+    for hits in groups.values():
+        hits.sort(key=lambda h: h["score"], reverse=True)
+
+    ranked_videos = sorted(groups.items(), key=lambda g: g[1][0]["score"], reverse=True)
 
     results = []
-    for idx, score in ranked:
-        if float(score) < threshold:
-            break
-        if len(results) >= top_k:
-            break
-        results.append({**metadata[idx], "score": float(score)})
+    for file_name, hits in ranked_videos[:top_k]:
+        results.append({
+            "file": file_name,
+            "best_score": hits[0]["score"],
+            "timestamps": hits,
+        })
 
     return results
