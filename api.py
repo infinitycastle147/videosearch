@@ -47,6 +47,7 @@ from videosearch.indexer import (
     load_index,
 )
 from videosearch.searcher import search
+from videosearch.duplicates import find_duplicates
 
 app = FastAPI()
 
@@ -268,6 +269,25 @@ def get_video(path: str = Query(...), dir: str | None = Query(None)):
         media_type="video/mp4",
         filename=path,
     )
+
+
+@app.get("/api/duplicates")
+def get_duplicates(threshold: float = Query(0.95)):
+    """Find duplicate/similar media across all indexed folders."""
+    all_groups = []
+    for folder in _load_library():
+        video_dir = Path(folder["path"])
+        if not video_dir.exists():
+            continue
+        try:
+            groups = find_duplicates(video_dir, similarity_threshold=threshold)
+            for g in groups:
+                g["video_dir"] = str(video_dir)
+            all_groups.extend(groups)
+        except Exception:
+            continue
+    all_groups.sort(key=lambda g: g["similarity"], reverse=True)
+    return all_groups
 
 
 if __name__ == "__main__":
