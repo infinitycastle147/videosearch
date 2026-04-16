@@ -1,7 +1,28 @@
+import os
+import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from typing import Iterator
+
+
+def _find_ffmpeg() -> str:
+    """Find ffmpeg binary: check bundled location first, then system PATH."""
+    if getattr(sys, "frozen", False):
+        # PyInstaller bundle: check next to executable
+        exe_dir = Path(sys.executable).parent
+        bundled = exe_dir / "ffmpeg"
+        if bundled.exists() and os.access(str(bundled), os.X_OK):
+            return str(bundled)
+        # Check _MEIPASS
+        bundled = Path(sys._MEIPASS) / "ffmpeg"
+        if bundled.exists() and os.access(str(bundled), os.X_OK):
+            return str(bundled)
+    found = shutil.which("ffmpeg")
+    if found:
+        return found
+    return "ffmpeg"
 
 
 def _run_ffmpeg(video_path: Path, output_dir: Path, interval: int) -> None:
@@ -12,8 +33,9 @@ def _run_ffmpeg(video_path: Path, output_dir: Path, interval: int) -> None:
     """
     if interval <= 0:
         raise ValueError(f"interval must be a positive integer, got {interval!r}")
+    ffmpeg_bin = _find_ffmpeg()
     cmd = [
-        "ffmpeg", "-loglevel", "error",
+        ffmpeg_bin, "-loglevel", "error",
         "-i", str(video_path),
         "-vf", f"fps=1/{interval}",
         "-q:v", "2",
