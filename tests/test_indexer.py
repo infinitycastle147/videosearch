@@ -100,7 +100,9 @@ def test_build_index_reindexes_changed_file(tmp_path):
     import os
     os.utime(video, (9999, 9999))
 
-    fake_frame = tmp_path / "frame.jpg"
+    frames_dir = tmp_path / "frames"
+    frames_dir.mkdir()
+    fake_frame = frames_dir / "frame.jpg"
     Image.new("RGB", (224, 224)).save(fake_frame)
 
     new_emb = np.random.randn(512).astype(np.float32)
@@ -128,7 +130,9 @@ def test_build_index_prints_progress(tmp_path, capsys):
 
     video = tmp_path / "myclip.mp4"
     video.write_bytes(b"fake")
-    fake_frame = tmp_path / "frame.jpg"
+    frames_dir = tmp_path / "frames"
+    frames_dir.mkdir()
+    fake_frame = frames_dir / "frame.jpg"
     Image.new("RGB", (224, 224)).save(fake_frame)
 
     emb_vec = np.random.randn(512).astype(np.float32)
@@ -147,3 +151,71 @@ def test_build_index_prints_progress(tmp_path, capsys):
     captured = capsys.readouterr()
     assert "myclip.mp4" in captured.out
     assert "Index complete" in captured.out
+
+
+def test_build_index_indexes_images(tmp_path):
+    """build_index indexes image files with type='image'."""
+    from videosearch.indexer import build_index, load_index
+    from PIL import Image
+
+    # Create a fake image
+    img = tmp_path / "photo.jpg"
+    Image.new("RGB", (224, 224), color=(100, 200, 50)).save(img)
+
+    emb_vec = np.random.randn(512).astype(np.float32)
+    emb_vec /= np.linalg.norm(emb_vec)
+
+    with patch("videosearch.indexer.load_image_session") as mock_session, \
+         patch("videosearch.indexer.embed_frame") as mock_embed:
+
+        mock_session.return_value = MagicMock()
+        mock_embed.return_value = emb_vec
+
+        build_index(tmp_path, interval=5)
+
+    embeddings, metadata = load_index(tmp_path)
+    assert len(metadata) == 1
+    assert metadata[0]["file"] == "photo.jpg"
+    assert metadata[0]["type"] == "image"
+    assert metadata[0]["timestamp_str"] == "image"
+    assert embeddings.shape == (1, 512)
+
+
+def test_build_index_handles_mixed_media(tmp_path, capsys):
+    """build_index indexes both videos and images in the same folder."""
+    from videosearch.indexer import build_index, load_index
+    from PIL import Image
+
+    # Create a fake video and image
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"fake")
+    img = tmp_path / "photo.png"
+    Image.new("RGB", (224, 224)).save(img)
+
+    frames_dir = tmp_path / "frames"
+    frames_dir.mkdir()
+    fake_frame = frames_dir / "frame.jpg"
+    Image.new("RGB", (224, 224)).save(fake_frame)
+
+    emb_vec = np.random.randn(512).astype(np.float32)
+    emb_vec /= np.linalg.norm(emb_vec)
+
+    with patch("videosearch.indexer.load_image_session") as mock_session, \
+         patch("videosearch.indexer.extract_frames") as mock_extract, \
+         patch("videosearch.indexer.embed_frame") as mock_embed:
+
+        mock_session.return_value = MagicMock()
+        mock_extract.return_value = iter([(fake_frame, 0)])
+        mock_embed.return_value = emb_vec
+
+        build_index(tmp_path, interval=5)
+
+    embeddings, metadata = load_index(tmp_path)
+    types = {m["type"] for m in metadata}
+    assert "video" in types
+    assert "image" in types
+    assert len(metadata) == 2
+
+    captured = capsys.readouterr()
+    assert "clip.mp4" in captured.out
+    assert "photo.png" in captured.out

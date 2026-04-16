@@ -11,7 +11,9 @@ from .extractor import extract_frames
 INDEX_DIR = ".videosearch"
 EMBEDDINGS_FILE = "embeddings.npy"
 METADATA_FILE = "metadata.json"
-SUPPORTED_EXTENSIONS = {".mp4", ".mkv", ".avi", ".mov"}
+SUPPORTED_VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".mov"}
+SUPPORTED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tiff"}
+SUPPORTED_EXTENSIONS = SUPPORTED_VIDEO_EXTENSIONS | SUPPORTED_IMAGE_EXTENSIONS
 
 # CLIP image preprocessing constants
 _CLIP_MEAN = np.array([0.48145466, 0.4578275, 0.40821073], dtype=np.float32)
@@ -115,8 +117,9 @@ def save_index(video_dir: Path, embeddings: np.ndarray, metadata: list) -> None:
 
 
 def build_index(video_dir: Path, interval: int = 5) -> None:
-    """Build or update the search index for all videos in video_dir.
+    """Build or update the search index for all media in video_dir.
 
+    Indexes both videos (frame sampling) and images (single embedding).
     Skips files already indexed with the same mtime.
     Replaces entries for files whose mtime has changed.
     """
@@ -128,12 +131,13 @@ def build_index(video_dir: Path, interval: int = 5) -> None:
     new_embeddings: list[np.ndarray] = []
     new_metadata: list[dict] = []
 
-    for video_path in sorted(video_dir.iterdir()):
-        if video_path.suffix.lower() not in SUPPORTED_EXTENSIONS:
+    for file_path in sorted(video_dir.iterdir()):
+        ext = file_path.suffix.lower()
+        if ext not in SUPPORTED_EXTENSIONS:
             continue
 
-        mtime = int(video_path.stat().st_mtime)
-        file_key = video_path.name
+        mtime = int(file_path.stat().st_mtime)
+        file_key = file_path.name
 
         if (file_key, mtime) in indexed_keys:
             continue
@@ -143,21 +147,38 @@ def build_index(video_dir: Path, interval: int = 5) -> None:
         if len(embeddings) > 0 and len(keep_indices) < len(embeddings):
             embeddings = embeddings[keep_indices] if keep_indices else np.zeros((0, 512), dtype=np.float32)
 
-        print(f"Indexing {file_key}...")
-        try:
-            for frame_path, timestamp_sec in extract_frames(video_path, interval):
-                emb = embed_frame(session, frame_path)
+        if ext in SUPPORTED_IMAGE_EXTENSIONS:
+            print(f"Indexing image {file_key}...")
+            try:
+                emb = embed_frame(session, file_path)
                 new_embeddings.append(emb)
-                minutes, seconds = divmod(timestamp_sec, 60)
                 new_metadata.append({
                     "file": file_key,
                     "mtime": mtime,
-                    "timestamp_sec": timestamp_sec,
-                    "timestamp_str": f"{minutes}:{seconds:02d}",
+                    "timestamp_sec": 0,
+                    "timestamp_str": "image",
+                    "type": "image",
                 })
-        except RuntimeError as e:
-            print(f"  Warning: skipping {file_key}: {e}")
-            continue
+            except Exception as e:
+                print(f"  Warning: skipping {file_key}: {e}")
+                continue
+        else:
+            print(f"Indexing {file_key}...")
+            try:
+                for frame_path, timestamp_sec in extract_frames(file_path, interval):
+                    emb = embed_frame(session, frame_path)
+                    new_embeddings.append(emb)
+                    minutes, seconds = divmod(timestamp_sec, 60)
+                    new_metadata.append({
+                        "file": file_key,
+                        "mtime": mtime,
+                        "timestamp_sec": timestamp_sec,
+                        "timestamp_str": f"{minutes}:{seconds:02d}",
+                        "type": "video",
+                    })
+            except RuntimeError as e:
+                print(f"  Warning: skipping {file_key}: {e}")
+                continue
 
     if new_embeddings:
         new_arr = np.stack(new_embeddings).astype(np.float32)
@@ -165,4 +186,4 @@ def build_index(video_dir: Path, interval: int = 5) -> None:
         metadata = metadata + new_metadata
 
     save_index(video_dir, embeddings, metadata)
-    print(f"Index complete: {len(metadata)} clips indexed.")
+    print(f"Index complete: {len(metadata)} items indexed.")

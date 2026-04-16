@@ -37,9 +37,13 @@ def search(video_dir: Path, query: str, top_k: int, threshold: float) -> None:
 
     click.echo(f'\nResults for: "{query}"\n')
     for i, r in enumerate(results, 1):
-        click.echo(f'{i:2}. {r["file"]}  (best: {r["best_score"]:.2f})')
-        for t in r["timestamps"]:
-            click.echo(f'      @ {t["timestamp_str"]}  (score: {t["score"]:.2f})')
+        is_image = r["timestamps"][0].get("type") == "image"
+        if is_image:
+            click.echo(f'{i:2}. {r["file"]}  (score: {r["best_score"]:.2f})  [image]')
+        else:
+            click.echo(f'{i:2}. {r["file"]}  (best: {r["best_score"]:.2f})')
+            for t in r["timestamps"]:
+                click.echo(f'      @ {t["timestamp_str"]}  (score: {t["score"]:.2f})')
 
 
 if __name__ == "__main__":

@@ -50,6 +50,7 @@ def search(
             "timestamp_sec": metadata[idx]["timestamp_sec"],
             "timestamp_str": metadata[idx]["timestamp_str"],
             "score": score_f,
+            "type": metadata[idx].get("type", "video"),
         }
         if file_name not in groups:
             groups[file_name] = []
