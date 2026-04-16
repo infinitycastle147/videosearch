@@ -37,14 +37,35 @@ def search(
     query_vec = query_emb.squeeze(0).numpy().astype(np.float32)
     scores = embeddings @ query_vec  # cosine similarity (both L2-normalized)
 
-    ranked = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)
+    # Group all above-threshold hits by video file
+    groups: dict[str, list[dict]] = {}
+    for idx, score_val in enumerate(scores):
+        score_f = float(score_val)
+        if score_f < threshold:
+            continue
+        file_name = metadata[idx]["file"]
+        hit = {
+            "timestamp_sec": metadata[idx]["timestamp_sec"],
+            "timestamp_str": metadata[idx]["timestamp_str"],
+            "score": score_f,
+        }
+        if file_name not in groups:
+            groups[file_name] = []
+        groups[file_name].append(hit)
+
+    # Sort timestamps within each group by score descending
+    for hits in groups.values():
+        hits.sort(key=lambda h: h["score"], reverse=True)
+
+    # Build results sorted by best score per video, limited to top_k videos
+    ranked_videos = sorted(groups.items(), key=lambda g: g[1][0]["score"], reverse=True)
 
     results = []
-    for idx, score in ranked:
-        if float(score) < threshold:
-            break
-        if len(results) >= top_k:
-            break
-        results.append({**metadata[idx], "score": float(score)})
+    for file_name, hits in ranked_videos[:top_k]:
+        results.append({
+            "file": file_name,
+            "best_score": hits[0]["score"],
+            "timestamps": hits,
+        })
 
     return results
