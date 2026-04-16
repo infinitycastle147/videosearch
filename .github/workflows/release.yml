@@ -20,7 +20,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install export dependencies
-        run: pip install torch --index-url https://download.pytorch.org/whl/cpu && pip install open_clip_torch onnx onnxruntime
+        run: pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu && pip install open_clip_torch onnx onnxruntime
 
       - name: Export CLIP to ONNX
         run: python scripts/export_onnx.py
