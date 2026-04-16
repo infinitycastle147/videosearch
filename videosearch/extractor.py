@@ -9,14 +9,15 @@ from typing import Iterator
 
 def _find_ffmpeg() -> str:
     """Find ffmpeg binary: check bundled location first, then system PATH."""
+    name = "ffmpeg.exe" if sys.platform == "win32" else "ffmpeg"
     if getattr(sys, "frozen", False):
         # PyInstaller bundle: check next to executable
         exe_dir = Path(sys.executable).parent
-        bundled = exe_dir / "ffmpeg"
+        bundled = exe_dir / name
         if bundled.exists() and os.access(str(bundled), os.X_OK):
             return str(bundled)
         # Check _MEIPASS
-        bundled = Path(sys._MEIPASS) / "ffmpeg"
+        bundled = Path(sys._MEIPASS) / name
         if bundled.exists() and os.access(str(bundled), os.X_OK):
             return str(bundled)
     found = shutil.which("ffmpeg")

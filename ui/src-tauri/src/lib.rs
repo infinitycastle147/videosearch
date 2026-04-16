@@ -18,7 +18,11 @@ fn spawn_api_server_dev() -> Option<Child> {
         }
     }
 
-    let venv_python = project_dir.join("venv").join("bin").join("python");
+    let venv_python = if cfg!(target_os = "windows") {
+        project_dir.join("venv").join("Scripts").join("python.exe")
+    } else {
+        project_dir.join("venv").join("bin").join("python")
+    };
     let api_script = project_dir.join("api.py");
 
     if !api_script.exists() {
@@ -48,7 +52,12 @@ fn spawn_api_server_prod(app: &tauri::App) -> Option<Child> {
     // We need to run from the Resources folder so it can find its dylibs
     let resource_dir = app.path().resource_dir().ok()?;
     let sidecar_dir = resource_dir.join("binaries").join("videosearch-api");
-    let sidecar_path = sidecar_dir.join("videosearch-api");
+    let sidecar_name = if cfg!(target_os = "windows") {
+        "videosearch-api.exe"
+    } else {
+        "videosearch-api"
+    };
+    let sidecar_path = sidecar_dir.join(sidecar_name);
 
     if !sidecar_path.exists() {
         log::warn!("Sidecar binary not found at {:?}", sidecar_path);

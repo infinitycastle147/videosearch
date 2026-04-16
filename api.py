@@ -17,15 +17,16 @@ def _get_base_dir() -> Path:
 
 def _find_ffmpeg(name: str = "ffmpeg") -> str:
     """Find ffmpeg/ffprobe: check bundled location first, then system PATH."""
+    exe_name = f"{name}.exe" if sys.platform == "win32" else name
     # Check next to the executable (Tauri resources or PyInstaller dist)
     base = _get_base_dir()
-    bundled = base / name
+    bundled = base / exe_name
     if bundled.exists() and os.access(str(bundled), os.X_OK):
         return str(bundled)
     # Check sibling of the executable directory
     if getattr(sys, "frozen", False):
         exe_dir = Path(sys.executable).parent
-        sibling = exe_dir / name
+        sibling = exe_dir / exe_name
         if sibling.exists() and os.access(str(sibling), os.X_OK):
             return str(sibling)
     # Fall back to system PATH
