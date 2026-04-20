@@ -1,86 +1,90 @@
-# videosearch
+# VideoSearch
 
-A local CLI tool that lets you search your video library using plain English. Type "dog running in the park" and it finds the exact moments across all your videos that match — ranked by similarity with timestamps.
+Google for your videos — search your local video library using plain English. Type "dog running in the park" and it finds the exact moments across all your videos that match, ranked by similarity with timestamps.
 
 No cloud. No API keys. Runs entirely on your machine.
 
 ---
 
+## Download
+
+Grab the latest release for your OS:
+
+**[Download from GitHub Releases](https://github.com/infinitycastle147/videosearch/releases/latest)**
+
+| Platform | File | Notes |
+|---|---|---|
+| macOS (Apple Silicon) | `VideoSearch_x.x.x_aarch64.dmg` | M1/M2/M3/M4 Macs |
+| Windows | `VideoSearch_x.x.x_x64-setup.exe` | Windows 10+ |
+| Linux (Debian/Ubuntu) | `video-search_x.x.x_amd64.deb` | `sudo dpkg -i <file>.deb` |
+
+### First-time setup
+
+1. **Install ffmpeg** (required for extracting video frames):
+   - macOS: `brew install ffmpeg`
+   - Windows: `winget install ffmpeg` or download from [ffmpeg.org](https://ffmpeg.org/download.html)
+   - Linux: `sudo apt install ffmpeg` (or your distro's package manager)
+
+2. **macOS Gatekeeper**: The app is unsigned. Right-click the app > "Open" > click "Open" in the dialog to bypass Gatekeeper.
+
+3. Open VideoSearch, select a folder with videos, and click "Index". Once indexed, type any search query.
+
+---
+
 ## How it works
 
-Videos are too long to embed as a whole, so the tool slices each one into frames (1 frame every 5 seconds by default). Each frame is encoded into a 512-dimensional vector using [CLIP](https://github.com/mlfoundations/open_clip) (ViT-B/32), a model that maps both images and text into the same embedding space. The vectors are stored in a flat `.npy` file alongside a JSON metadata file.
+Videos are sliced into frames (1 frame every 5 seconds by default). Each frame is encoded into a 512-dimensional vector using [CLIP ViT-B/32](https://github.com/openai/CLIP) via ONNX Runtime. The vectors are stored in a flat `.npy` file alongside JSON metadata.
 
-When you search, your query is encoded by the same CLIP text encoder. Cosine similarity is computed between the query vector and every stored frame vector. The closest matches are returned with filenames, timestamps, and scores.
+When you search, your query is encoded by the same CLIP text encoder. Cosine similarity is computed between the query vector and every stored frame vector. Results are grouped by video, ranked by best matching score.
 
 ```
 Videos on disk
-    → ffmpeg extracts 1 frame every 5s
-    → CLIP image encoder → 512-dim vector per frame
-    → saved to .videosearch/embeddings.npy + metadata.json
+    -> ffmpeg extracts 1 frame every 5s
+    -> CLIP image encoder (ONNX) -> 512-dim vector per frame
+    -> saved to .videosearch/embeddings.npy + metadata.json
 
 Search query
-    → CLIP text encoder → 512-dim query vector
-    → cosine similarity against all frame vectors
-    → top-K results ranked by score
+    -> CLIP text encoder (ONNX) -> 512-dim query vector
+    -> cosine similarity against all frame vectors
+    -> results grouped by video, ranked by best score
 ```
 
 ---
 
-## Requirements
+## CLI usage
 
-- Python 3.10+
-- `ffmpeg` installed on your system
-- ~600 MB disk space for CLIP model weights (downloaded once, cached)
-- RAM: see [RAM usage](#ram-usage)
+VideoSearch also works as a command-line tool.
 
----
-
-## Installation
-
-### Local (pip)
+### Installation (CLI)
 
 ```bash
 git clone https://github.com/infinitycastle147/videosearch.git
 cd videosearch
+python -m venv venv && source venv/bin/activate
 pip install -e .
 ```
 
-### Docker (no Python/ffmpeg setup needed)
+You also need the ONNX models. Either export them yourself (requires PyTorch):
 
 ```bash
-git clone https://github.com/infinitycastle147/videosearch.git
-cd videosearch
-docker build -t videosearch .
+pip install torch open_clip_torch onnx
+python scripts/export_onnx.py
 ```
 
-CLIP model weights are downloaded on the first run and cached in a named Docker volume so subsequent runs are instant.
+Or download them from a release and place in `models/`.
 
----
-
-## Usage
-
-### Step 1 — Index your videos
+### Index your videos
 
 ```bash
-# Local
 videosearch index ~/Videos
-
-# Docker
-VIDEO_DIR=~/Videos docker-compose run videosearch index /videos
 ```
 
-This scans the folder for `.mp4`, `.mkv`, `.avi`, `.mov` files, extracts frames with ffmpeg, encodes each frame with CLIP, and saves the index to `~/Videos/.videosearch/`.
+This scans for `.mp4`, `.mkv`, `.avi`, `.mov` files, extracts frames with ffmpeg, and saves the index. Re-run anytime — only new or changed files are re-indexed.
 
-Re-run anytime — only new or changed files are re-indexed (incremental, based on file modification time).
-
-### Step 2 — Search
+### Search
 
 ```bash
-# Local
 videosearch search ~/Videos "dog running in the park"
-
-# Docker
-VIDEO_DIR=~/Videos docker-compose run videosearch search /videos "dog running in the park"
 ```
 
 **Example output:**
@@ -88,9 +92,11 @@ VIDEO_DIR=~/Videos docker-compose run videosearch search /videos "dog running in
 ```
 Results for: "dog running in the park"
 
- 1. park_trip.mp4                         @ 0:42  (score: 0.91)
- 2. summer_vacation.mp4                   @ 3:15  (score: 0.87)
- 3. backyard_bbq.mp4                      @ 1:10  (score: 0.74)
+ 1. park_trip.mp4  (best: 0.91)
+      @ 0:42  (score: 0.91)
+      @ 1:15  (score: 0.85)
+ 2. summer_vacation.mp4  (best: 0.87)
+      @ 3:15  (score: 0.87)
 ```
 
 ### Options
@@ -98,15 +104,15 @@ Results for: "dog running in the park"
 | Command | Flag | Default | Description |
 |---------|------|---------|-------------|
 | `index` | `--interval N` | `5` | Seconds between sampled frames |
-| `search` | `--top-k N` | `5` | Number of results to return |
-| `search` | `--threshold F` | `0.2` | Minimum similarity score (0–1) |
+| `search` | `--top-k N` | `5` | Number of video results to return |
+| `search` | `--threshold F` | `0.2` | Minimum similarity score (0-1) |
+
+### Docker
 
 ```bash
-# Sample more densely (every 2 seconds) for higher precision
-videosearch index ~/Videos --interval 2
-
-# Return top 10 results with a stricter threshold
-videosearch search ~/Videos "sunset over ocean" --top-k 10 --threshold 0.3
+docker build -t videosearch .
+VIDEO_DIR=~/Videos docker-compose run videosearch index /videos
+VIDEO_DIR=~/Videos docker-compose run videosearch search /videos "sunset over ocean"
 ```
 
 ---
@@ -115,70 +121,67 @@ videosearch search ~/Videos "sunset over ocean" --top-k 10 --threshold 0.3
 
 | Scenario | Approximate RAM |
 |---|---|
-| CLIP model loaded (ViT-B/32) | ~600 MB |
-| Index for 1 hour of video (at 5s interval) | ~14 MB |
-| Index for 10 hours of video | ~140 MB |
-| Index for 100 hours of video | ~1.4 GB |
+| ONNX model loaded (CLIP ViT-B/32) | ~400 MB |
+| Index for 1 hour of video (at 5s interval) | ~1.4 MB |
+| Index for 10 hours of video | ~14 MB |
+| Index for 100 hours of video | ~140 MB |
 
-**Formula:** `N_clips × 512 dims × 4 bytes`
+**Formula:** `N_clips x 512 dims x 4 bytes`
 
-- 1 hour at 5s interval = 720 clips → 720 × 512 × 4 = ~1.4 MB per hour of video
-- The full index is loaded into RAM on every search
-
-For typical home video libraries (tens to low hundreds of files), RAM usage from the index itself is negligible. The CLIP model dominates at ~600 MB.
-
-**Minimum recommended:** 2 GB RAM (model + index + OS headroom)
+Minimum recommended: 2 GB RAM.
 
 ---
 
-## Index storage
-
-The index lives at `<your-video-dir>/.videosearch/`:
-
-```
-.videosearch/
-├── embeddings.npy   # Float32 array, shape (N_clips, 512)
-└── metadata.json    # [{file, timestamp_sec, timestamp_str, mtime}, ...]
-```
-
-You can delete this folder at any time to start fresh. Re-run `videosearch index` to rebuild.
-
----
-
-## Supported formats
-
-`.mp4` · `.mkv` · `.avi` · `.mov`
-
----
-
-## Limitations
-
-- **Text queries only** — image or audio queries are not supported
-- **No scene understanding** — similarity is frame-level, not semantic scene-level
-- **Deleted videos stay in the index** — if you delete a video, re-index the folder to rebuild from scratch (incremental indexing only adds, never prunes)
-- **First run is slow** — CLIP weights (~600 MB) are downloaded automatically on first use
-- **CPU inference** — no GPU acceleration in the current setup; indexing is slow for large libraries
-
----
-
-## Project structure
+## Architecture
 
 ```
 videosearch/
 ├── videosearch/
-│   ├── extractor.py   # ffmpeg wrapper — extracts frames as JPEGs
-│   ├── indexer.py     # CLIP model, frame embedding, index save/load/build
-│   ├── searcher.py    # Text query encoding, cosine similarity search
-│   └── cli.py         # Click CLI — index and search subcommands
-├── tests/             # 21 unit tests (pytest)
+│   ├── extractor.py       # ffmpeg wrapper — extracts frames as JPEGs
+│   ├── indexer.py          # ONNX image encoder, frame embedding, index I/O
+│   ├── searcher.py         # ONNX text encoder, cosine similarity search
+│   ├── clip_tokenizer.py   # Pure-Python BPE tokenizer for CLIP
+│   └── cli.py              # Click CLI — index and search subcommands
+├── api.py                  # FastAPI server (desktop app backend)
+├── ui/                     # Tauri 2 + React + TypeScript frontend
+├── models/                 # ONNX model files (not in git)
+├── scripts/
+│   ├── export_onnx.py      # One-time CLIP -> ONNX export script
+│   └── build-sidecar.sh    # PyInstaller build for desktop app
+├── tests/                  # 27 unit tests (pytest)
+├── .github/workflows/      # CI/CD: cross-platform release builds
 ├── Dockerfile
 ├── docker-compose.yml
 └── pyproject.toml
 ```
 
+**Desktop app stack:** Tauri 2 (Rust shell + native webview) + React + Tailwind CSS v4. The Python backend runs as a PyInstaller sidecar process.
+
 ---
 
-## Running tests
+## Supported formats
+
+`.mp4` `.mkv` `.avi` `.mov`
+
+---
+
+## Building from source
+
+### Desktop app
+
+```bash
+# 1. Export ONNX models (one-time, requires PyTorch)
+pip install torch open_clip_torch onnx onnxruntime
+python scripts/export_onnx.py
+
+# 2. Build PyInstaller sidecar
+./scripts/build-sidecar.sh
+
+# 3. Build Tauri app
+cd ui && npm install && npm run tauri build
+```
+
+### Running tests
 
 ```bash
 pip install -e ".[dev]"
