@@ -42,6 +42,7 @@ from pydantic import BaseModel
 
 from videosearch.indexer import (
     SUPPORTED_EXTENSIONS,
+    SUPPORTED_VIDEO_EXTENSIONS,
     INDEX_DIR,
     build_index,
     load_index,
@@ -234,6 +235,23 @@ def remove_from_library(path: str = Query(...)):
     library = [f for f in library if f["path"] != path]
     _save_library(library)
     return {"ok": True}
+
+
+@app.get("/api/files")
+def list_files(folder: str = None):
+    """Return all indexed media files, optionally filtered by folder path."""
+    results = []
+    for entry in _load_library():
+        path = Path(entry["path"])
+        if folder and str(path) != folder:
+            continue
+        if not path.exists():
+            continue
+        for f in sorted(path.iterdir()):
+            if f.is_file() and f.suffix.lower() in SUPPORTED_EXTENSIONS:
+                ftype = "video" if f.suffix.lower() in SUPPORTED_VIDEO_EXTENSIONS else "image"
+                results.append({"file": f.name, "video_dir": str(path), "type": ftype})
+    return results
 
 
 @app.get("/api/thumbnail/{filename}")

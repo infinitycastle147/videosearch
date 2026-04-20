@@ -72,3 +72,32 @@ export function getVideoUrl(filepath: string, videoDir?: string): string {
   if (videoDir) url += `&dir=${encodeURIComponent(videoDir)}`;
   return url;
 }
+
+export interface MediaFile {
+  file: string;
+  video_dir: string;
+  type: "video" | "image";
+}
+
+export async function getFiles(folder?: string): Promise<MediaFile[]> {
+  const params = new URLSearchParams();
+  if (folder) params.set("folder", folder);
+  const res = await fetch(`${API_BASE}/api/files?${params}`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export interface DuplicateGroup {
+  files: string[];
+  similarity: number;
+  video_dir: string;
+}
+
+export async function getDuplicates(
+  threshold = 0.95
+): Promise<DuplicateGroup[]> {
+  const params = new URLSearchParams({ threshold: String(threshold) });
+  const res = await fetch(`${API_BASE}/api/duplicates?${params}`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
