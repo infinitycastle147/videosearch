@@ -123,16 +123,37 @@ def _extract_thumbnail(video_path: Path, output_path: Path) -> None:
     )
 
 
+def _generate_image_thumbnail(image_path: Path, output_path: Path) -> None:
+    """Resize an image and save it as a JPEG thumbnail."""
+    from PIL import Image as PILImage
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with PILImage.open(image_path) as img:
+            img = img.convert("RGB")
+            img.thumbnail((144, 144), PILImage.LANCZOS)
+            img.save(output_path, "JPEG", quality=85)
+    except Exception as e:
+        log.warning(f"Failed to generate thumbnail for {image_path}: {e}")
+
+
+import logging
+log = logging.getLogger(__name__)
+
+
 def _generate_thumbnails(video_dir: Path) -> None:
-    """Generate thumbnails for all videos that don't have one yet."""
+    """Generate thumbnails for all media files that don't have one yet."""
     thumb_dir = video_dir / INDEX_DIR / THUMBNAIL_DIR_NAME
     thumb_dir.mkdir(parents=True, exist_ok=True)
-    for video_path in sorted(video_dir.iterdir()):
-        if video_path.suffix.lower() not in SUPPORTED_EXTENSIONS:
+    for media_path in sorted(video_dir.iterdir()):
+        ext = media_path.suffix.lower()
+        if ext not in SUPPORTED_EXTENSIONS:
             continue
-        thumb_path = thumb_dir / f"{video_path.stem}.jpg"
+        thumb_path = thumb_dir / f"{media_path.stem}.jpg"
         if not thumb_path.exists():
-            _extract_thumbnail(video_path, thumb_path)
+            if ext in SUPPORTED_VIDEO_EXTENSIONS:
+                _extract_thumbnail(media_path, thumb_path)
+            else:
+                _generate_image_thumbnail(media_path, thumb_path)
 
 
 def _count_videos(directory: Path) -> int:
